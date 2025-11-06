@@ -1,19 +1,26 @@
-FROM php:8.2-fpm-alpine AS base
+# --- Base Stage ---
+# We are switching from 'alpine' to 'bookworm' (Debian)
+# This is a much more standard build environment and will fix our SSL issue.
+FROM php:8.2-fpm-bookworm AS base
 
 WORKDIR /var/www/html
 
-# --- Install Base Dependencies ---
-# Install MariaDB client developer libraries *before* pdo_mysql
-# This is the correct way to provide the SSL libraries for the build
-RUN apk add --no-cache mariadb-dev \
-    && docker-php-ext-install pdo pdo_mysql \
-    && apk del mariadb-dev \
-    && docker-php-ext-enable pdo_mysql
+# --- Install Base Dependencies (Debian-style) ---
+# We use 'apt-get' instead of 'apk'
+# We install 'libmariadb-dev' which provides the SSL libraries for the build
+RUN apt-get update && \
+    apt-get install -y libmariadb-dev libssl-dev && \
+    docker-php-ext-install pdo pdo_mysql && \
+    docker-php-ext-enable pdo_mysql && \
+    # Clean up build dependencies
+    apt-get purge -y libmariadb-dev libssl-dev && \
+    apt-get autoremove -y && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 # --- Composer Stage ---
-# Get composer in its own stage
+# This stage is unchanged
 FROM composer:2.7 AS composer
-# No COPY needed here
 
 # --- Development Stage (default) ---
 # This is what docker-compose will use
@@ -32,10 +39,11 @@ USER www-data
 FROM base AS prod
 ARG TARGETPLATFORM=${BUILDPLATFORM:-linux/amd64}
 
-# --- Install Production Dependencies ---
-# Install Nginx and other utilities
-# We need ca-certificates for SSL connections (e.g., to Azure MySQL)
-RUN apk add --no-cache nginx ca-certificates
+# --- Install Production Dependencies (Debian-style) ---
+RUN apt-get update && \
+    apt-get install -y nginx ca-certificates && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 # Copy composer in
 COPY --from=composer /usr/bin/composer /usr/bin/composer
