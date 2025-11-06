@@ -1,23 +1,24 @@
-# This is the standard Laravel gitignore file.
-# It lives inside your 'src' directory.
-
+*.log
+.DS_Store
+.env
+.env.backup
+.env.production
+.phpactor.json
+.phpunit.result.cache
+/.fleet
+/.idea
+/.nova
+/.phpunit.cache
+/.vscode
+/.zed
+/auth.json
+/node_modules
+/public/build
 /public/hot
 /public/storage
 /storage/*.key
-/storage/framework/cache/*.key
-/storage/framework/sessions/*
-/storage/framework/views/*.php
-/storage/logs/*.log
-/vendor/
-
-# Ignore all environment files
-# We will manage these with GitHub Secrets for production
-.env
-.env.*
-!.env.example
-
-.phpunit.result.cache
+/storage/pail
+/vendor
 Homestead.json
 Homestead.yaml
-npm-debug.log
-yarn-error.log
+Thumbs.db

@@ -14,15 +14,18 @@ RUN docker-php-ext-install pdo pdo_mysql zip gd
 
 # --- Composer Stage ---
 # Get composer in its own stage
+# The 'composer:2.7' image already has the binary at /usr/bin/composer
+# We just name this stage 'composer' so other stages can copy from it.
 FROM composer:2.7 AS composer
-COPY --from=composer /usr/bin/composer /usr/bin/composer
+# FIX: Removed the circular 'COPY --from=composer' line that was here.
 
 # --- Development Stage (default) ---
 # This is what docker-compose will use
 FROM base AS development
-TARGETPLATFORM=${BUILDPLATFORM:-linux/amd64}
+# FIX: Added 'ARG' before TARGETPLATFORM
+ARG TARGETPLATFORM=${BUILDPLATFORM:-linux/amd64}
 
-# Copy composer in
+# Copy composer in from our 'composer' stage
 COPY --from=composer /usr/bin/composer /usr/bin/composer
 
 # Change ownership of the web directory to the web user 'www-data'
@@ -36,9 +39,10 @@ CMD ["php-fpm"]
 # --- Production Stage ---
 # This is what our CI/CD will build
 FROM base AS prod
-TARGETPLATFORM=linux/amd64
+# FIX: Added 'ARG' before TARGETPLATFORM
+ARG TARGETPLATFORM=linux/amd64
 
-# Copy composer in
+# Copy composer in from our 'composer' stage
 COPY --from=composer /usr/bin/composer /usr/bin/composer
 
 # Copy all of our application code
