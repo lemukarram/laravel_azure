@@ -1,0 +1,8 @@
+# This is for your main project root, outside 'src'.
+
+# Ignore common IDE and OS files
+.idea/
+.vscode/
+.DS_Store
+*.swp
+*.swo
