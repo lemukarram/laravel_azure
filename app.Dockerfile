@@ -8,7 +8,10 @@ WORKDIR /var/www/html
 # Install system dependencies
 # - PDO (PHP Data Objects) and pdo_mysql for database access
 # - Other extensions as needed by Laravel
-RUN docker-php-ext-install pdo pdo_mysql
+RUN apk add --no-cache openssl openssl-dev \
+    && docker-php-ext-install pdo pdo_mysql \
+    && apk del openssl-dev \
+    && docker-php-ext-enable pdo_mysql
 
 # Get composer in its own stage
 FROM composer:2.7 AS composer
