@@ -56,8 +56,12 @@ RUN php artisan event:cache
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
 # --- Configure Production Container ---
-# Copy in our custom Nginx config for production
-COPY nginx.prod.conf /etc/nginx/conf.d/default.conf
+#
+# *** THIS IS THE FIX ***
+# Copy our new complete config file to the *main* Nginx config path
+COPY nginx.prod.conf /etc/nginx/nginx.conf
+#
+# *** END FIX ***
 
 # Copy in our startup script
 COPY start-prod.sh /usr/local/bin/start-prod.sh
