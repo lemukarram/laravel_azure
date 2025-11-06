@@ -35,7 +35,7 @@ ARG TARGETPLATFORM=${BUILDPLATFORM:-linux/amd64}
 
 # --- Install Production Dependencies ---
 # Install Nginx and other utilities
-RUN apk add --no-cache nginx
+RUN apk add --no-cache nginx ca-certificates
 
 # Copy composer in
 COPY --from=composer /usr/bin/composer /usr/bin/composer
