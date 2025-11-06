@@ -1,0 +1,99 @@
+# This workflow builds and deploys your Laravel app to Azure App Service.
+# It triggers on any push or merge to the 'main' branch.
+
+name: Build, Push, and Deploy Laravel to Azure
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch: # Allows you to run this workflow manually from the Actions tab
+
+env:
+  # === VARIABLES UPDATED BASED ON YOUR NEW SERVICES ===
+  
+  # 1. Your new Azure App Service name
+  AZURE_WEB_APP_NAME: 'laravelazure01' 
+  
+  # 2. Your Azure Container Registry (ACR) name
+  AZURE_CONTAINER_REGISTRY: 'laravelazure01' 
+  
+  # 3. This is a name for your image in the registry
+  IMAGE_NAME: 'muk-laravel-image'         
+  # ====================================================
+
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      # -----------------------------------------------------------------
+      # STEP 1: GET YOUR CODE
+      # -----------------------------------------------------------------
+      - name: 'STEP 1: Checkout GitHub Actions'
+        uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------
+      # STEP 2: LOG IN TO AZURE (FOR DEPLOYMENT)
+      # Uses the 'AZURE_CREDENTIALS' secret.
+      # -----------------------------------------------------------------
+      - name: 'STEP 2: Log in to Azure'
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # -----------------------------------------------------------------
+      # STEP 3: LOG IN TO DOCKER (FOR PUSHING IMAGE)
+      # Uses the 'ACR_USERNAME' and 'ACR_PASSWORD' secrets.
+      # -----------------------------------------------------------------
+      - name: 'STEP 3: Log in to Azure Container Registry'
+        uses: azure/docker-login@v1
+        with:
+          login-server: ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      # -----------------------------------------------------------------
+      # STEP 4: CREATE PRODUCTION .env FILE
+      # Securely creates the .env file from your 'AZURE_ENV_FILE' secret.
+      # -----------------------------------------------------------------
+      - name: 'STEP 4: Create .env file for production'
+        run: |
+          echo "Creating .env file from secret..."
+          # This creates the .env file inside the 'src' directory
+          echo "${{ secrets.AZURE_ENV_FILE }}" > ./src/.env
+          echo ".env file created."
+        shell: bash
+
+      # -----------------------------------------------------------------
+      # STEP 5: BUILD AND PUSH THE DOCKER IMAGE
+      # Builds the 'prod' target from your 'app.Dockerfile' and
+      # pushes it to your Azure Container Registry.
+      # -----------------------------------------------------------------
+      - name: 'STEP 5: Build and push Docker image'
+        run: |
+          echo "Building the 'prod' target..."
+          docker build . \
+            --file app.Dockerfile \
+            --target prod \
+            -t ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          
+          echo "Pushing image to ACR..."
+          docker push ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      # -----------------------------------------------------------------
+      # STEP 6: DEPLOY TO AZURE APP SERVICE
+      # Tells your App Service 'laravelazure01' to pull and run the new image.
+      # -----------------------------------------------------------------
+      - name: 'STEP 6: Deploy to Azure App Service'
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: ${{ env.AZURE_WEB_APP_NAME }}
+          images: ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      # -----------------------------------------------------------------
+      # STEP 7: LOG OUT
+      # -----------------------------------------------------------------
+      - name: 'STEP 7: Log out from Azure'
+        run: |
+          az logout
+        if: always() # Ensure logout runs even if this workflow fails

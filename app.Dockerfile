@@ -1,69 +1,73 @@
 # --- Base Stage ---
-# Start from an official PHP 8.2 FPM image (Alpine is lightweight)
+# Use an official PHP 8.2 image with FPM (FastCGI Process Manager)
 FROM php:8.2-fpm-alpine AS base
+
+# Set working directory
 WORKDIR /var/www/html
 
 # Install system dependencies
-RUN apk add --no-cache \
-    build-base shadow zip libzip-dev \
-    libpng-dev jpeg-dev freetype-dev gd
+# - PDO (PHP Data Objects) and pdo_mysql for database access
+# - Other extensions as needed by Laravel
+RUN docker-php-ext-install pdo pdo_mysql
 
-# Install common Laravel PHP extensions
-RUN docker-php-ext-configure gd --with-freetype --with-jpeg
-RUN docker-php-ext-install pdo pdo_mysql zip gd
-
-# --- Composer Stage ---
 # Get composer in its own stage
-# The 'composer:2.7' image already has the binary at /usr/bin/composer
-# We just name this stage 'composer' so other stages can copy from it.
 FROM composer:2.7 AS composer
-# FIX: Removed the circular 'COPY --from=composer' line that was here.
 
 # --- Development Stage (default) ---
 # This is what docker-compose will use
 FROM base AS development
-# FIX: Added 'ARG' before TARGETPLATFORM
+# The ARG instruction was missing here in the previous version
 ARG TARGETPLATFORM=${BUILDPLATFORM:-linux/amd64}
 
-# Copy composer in from our 'composer' stage
+# Copy composer in
 COPY --from=composer /usr/bin/composer /usr/bin/composer
 
-# Change ownership of the web directory to the web user 'www-data'
+# Set correct permissions for storage and cache (for local dev)
+# 'www-data' is the default user for php-fpm
 RUN chown -R www-data:www-data /var/www/html
 
-# Switch to the 'www-data' user
-USER www-data
-EXPOSE 9000
-CMD ["php-fpm"]
-
-# --- Production Stage ---
-# This is what our CI/CD will build
+# --- Production Stage (REWRITTEN) ---
+# This is what our CI/CD will build.
+# It now includes Nginx AND php-fpm in one image.
 FROM base AS prod
-# FIX: Added 'ARG' before TARGETPLATFORM
-ARG TARGETPLATFORM=linux/amd64
+# The ARG instruction was missing here in the previous version
+ARG TARGETPLATFORM=${BUILDPLATFORM:-linux/amd64}
 
-# Copy composer in from our 'composer' stage
+# --- Install Production Dependencies ---
+# Install Nginx and other utilities
+RUN apk add --no-cache nginx
+
+# Copy composer in
 COPY --from=composer /usr/bin/composer /usr/bin/composer
 
-# Copy all of our application code
-# The 'src' content will be copied to the root of the workdir
-COPY ./src /var/www/html/
+# Copy all our source code into the image
+COPY ./src /var/www/html
 
-# Copy the production .env file that was created by the CI/CD step
-COPY ./src/.env /var/www/html/.env
+# --- Configure Nginx ---
+# Copy our production Nginx config
+COPY nginx.prod.conf /etc/nginx/nginx.conf
 
-# Install production dependencies (no dev packages)
+# --- Configure Startup Script ---
+# Copy our production startup script
+COPY start-prod.sh /usr/local/bin/start-prod.sh
+# Make the startup script executable
+RUN chmod +x /usr/local/bin/start-prod.sh
+
+# --- Build Laravel Application ---
+# Install composer dependencies
 RUN composer install --no-interaction --no-dev --optimize-autoloader
 
 # Optimize Laravel for production
-# This bakes the config and routes into the image for speed
 RUN php artisan config:cache && \
     php artisan route:cache && \
-    php artisan view:cache
+    php artisan view:cache && \
+    php artisan event:cache
 
 # Set correct permissions for production
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
-USER www-data
-EXPOSE 9000
-CMD ["php-fpm"]
+# Expose port 80 for Nginx (this is what Azure will connect to)
+EXPOSE 80
+
+# The main command to run our startup script
+CMD ["/usr/local/bin/start-prod.sh"]
